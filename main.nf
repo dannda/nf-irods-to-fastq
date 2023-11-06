@@ -125,7 +125,7 @@ process renameCram {
 // Remove any empty (index) files at the end, let's assume no more than 50 bytes big
 process cramToFastq {
     label "normal4core"
-    container = '/nfs/cellgeni/tickets/tic-2598/actions/samtools_v1.18-biobambam2_v2.0.183.sif'
+    container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
     publishDir "${sample}", mode: "copy", enabled: "${params.publish_fastqs}"
     input:
         tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
