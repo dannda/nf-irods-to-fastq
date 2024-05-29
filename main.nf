@@ -36,7 +36,7 @@ process findCrams {
         path("${sample}_${val2}_${val3}.csv")
     script:
         """
-        imeta qu -z seq -d ${samplemeta} = ${sample} and ${meta2} = ${val2} and ${meta3} = ${val3} | \
+        imeta qu -z seq -d ${samplemeta} = "${sample}" and ${meta2} = "${val2}" and ${meta3} = "${val3}" | \
             grep -v "No rows found" | \
             sed 's/collection: //g' | \
             sed 's/dataObj: //g' | \
@@ -44,7 +44,7 @@ process findCrams {
             paste -d '/' - - | \
             grep -v "#888.cram" | \
             grep -v "yhuman" | \
-            sed "s/^/${sample},/" > ${sample}_${val2}_${val3}.csv
+            sed "s/^/${sample},/" > "${sample}_${val2}_${val3}.csv"
         """
 }
 
