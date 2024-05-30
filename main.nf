@@ -126,7 +126,7 @@ process renameCram {
 process cramToFastq {
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir "${sample}", mode: "copy", enabled: "${params.publish_fastqs}"
+    publishDir "${sample}", mode: "copy", enabled: "(${params.publish_fastqs} & ${params.for_upload} == true)"
     input:
         tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
     output:
@@ -151,6 +151,33 @@ process cramToFastq {
             samtools view -b ${cram} | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -1 ${sample}_S\$scount\\_L00\$lcount\\_${r1}_001.fastq.gz -2 ${sample}_S\$scount\\_L00\$lcount\\_${r2}_001.fastq.gz --i1 ${sample}_S\$scount\\_L00\$lcount\\_${i1}_001.fastq.gz --i2 ${sample}_S\$scount\\_L00\$lcount\\_${i2}_001.fastq.gz --index-format \$ISTRING -n -
         fi
         find . -type f -name "*.fastq.gz" -size -50c -exec rm {} \\;
+        """
+}
+
+process concatFastqs {
+    label "normal"
+    publishDir "${launchDir}", pattern: 'arrayexpress/*.fastq.gz', mode: 'copy', enabled: "${params.upload_type} == 'manual'"
+    input:
+        tuple val(sample), path(fastqs)
+    output:
+        path("arrayexpress/*.fastq.gz")
+    script:
+        """
+        mkdir -p arrayexpress
+        # create list of files per read
+        list_r1=\$(echo ${sample}*_S*_L*_R1_*.fastq.gz)
+        list_r2=\$(echo ${sample}*_S*_L*_R2_*.fastq.gz)
+        list_i1=\$(echo ${sample}*_S*_L*_I1_*.fastq.gz)
+        # shopt nullglob allows * expansion not to fail when it doesn't match anything
+        list_i2=\$(shopt -s nullglob; echo ${sample}*_S*_L*_I2_*.fastq.gz)
+        cat \$list_r1 > arrayexpress/${sample}_S1_L001_R1_001.fastq.gz
+        cat \$list_r2 > arrayexpress/${sample}_S1_L001_R2_001.fastq.gz
+        cat \$list_i1 > arrayexpress/${sample}_S1_L001_I1_001.fastq.gz
+        # check if list_i2 has any matches
+        if [[ ! -z "\$list_i2" ]]; then
+            echo "  ...Concatenating I2"
+            cat \$list_i2 > arrayexpress/${sample}_S1_L001_I2_001.fastq.gz
+        fi
         """
 }
 
@@ -256,5 +283,9 @@ workflow {
     } else {
         // This will find the CRAMs and publish the list
         findcrams()
+    }
+
+    if (params.for_upload == true){
+        concatFastqs(irods.out)
     }
 }
