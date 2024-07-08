@@ -126,7 +126,7 @@ process renameCram {
 process cramToFastq {
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir "${sample}", mode: "copy", enabled: "(${params.publish_fastqs} & ${params.for_upload} == true)"
+    publishDir "${params.publish_dir}", mode: "copy", overwrite: true, enabled: { params.publish_fastqs && !params.merge }
     input:
         tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
     output:
@@ -156,28 +156,46 @@ process cramToFastq {
 
 process concatFastqs {
     label "normal"
-    publishDir "${launchDir}", pattern: 'arrayexpress/*.fastq.gz', mode: 'copy', enabled: "${params.upload_type} == 'manual'"
+    publishDir "${params.publish_dir}", mode: 'copy', overwrite: true, saveAs: { f -> file(f).getFileName().toString() }
     input:
         tuple val(sample), path(fastqs)
     output:
-        path("arrayexpress/*.fastq.gz")
+        path("merged/*.fastq.gz")
     script:
         """
-        mkdir -p arrayexpress
-        # create list of files per read
+        mkdir -p merged
+        # create list of files per read R1/R2 and index I1
         list_r1=\$(echo ${sample}*_S*_L*_R1_*.fastq.gz)
         list_r2=\$(echo ${sample}*_S*_L*_R2_*.fastq.gz)
         list_i1=\$(echo ${sample}*_S*_L*_I1_*.fastq.gz)
-        # shopt nullglob allows * expansion not to fail when it doesn't match anything
+
+        # because not all samples will have R3 or I2 use shopt nullglob
+        # to allow * expansion and not fail when it doesn't match anything
+	    list_r3=\$(shopt -s nullglob; echo ${sample}*_S*_L*_R3_*.fastq.gz)
         list_i2=\$(shopt -s nullglob; echo ${sample}*_S*_L*_I2_*.fastq.gz)
-        cat \$list_r1 > arrayexpress/${sample}_S1_L001_R1_001.fastq.gz
-        cat \$list_r2 > arrayexpress/${sample}_S1_L001_R2_001.fastq.gz
-        cat \$list_i1 > arrayexpress/${sample}_S1_L001_I1_001.fastq.gz
-        # check if list_i2 has any matches
-        if [[ ! -z "\$list_i2" ]]; then
-            echo "  ...Concatenating I2"
-            cat \$list_i2 > arrayexpress/${sample}_S1_L001_I2_001.fastq.gz
+        
+		# R1 and R2 for all modalities
+        echo "  ...Concatenating \$list_r1 >> ${sample}_S1_L001_R1_001.fastq.gz"
+        cat \$list_r1 > merged/${sample}_S1_L001_R1_001.fastq.gz
+        echo "  ...Concatenating \$list_r2 >> ${sample}_S1_L001_R2_001.fastq.gz"
+        cat \$list_r2 > merged/${sample}_S1_L001_R2_001.fastq.gz
+        
+        # ATAC has R3 if present concatenate too
+        if [[ ! -z "\$list_r3" ]]; then
+            echo "  ...Concatenating \$list_r3 >> ${sample}_S1_L001_R3_001.fastq.gz"
+            cat \$list_r3 > merged/${sample}_S1_L001_R3_001.fastq.gz
         fi
+
+        # I1 for all modalities
+        echo "  ...Concatenating \$list_i1 >> ${sample}_S1_L001_I1_001.fastq.gz"
+        cat \$list_i1 > merged/${sample}_S1_L001_I1_001.fastq.gz
+        
+        ## we actually just ignore I2
+        ## check if list_i2 has any matches
+        ##if [[ ! -z "\$list_i2" ]]; then
+        ##    echo "  ...Concatenating \$list_i2 >> ${sample}_S1_L001_I2_001.fastq.gz"
+        ##    cat \$list_i2 > merged/${sample}_S1_L001_I2_001.fastq.gz
+        ##fi
         """
 }
 
@@ -274,7 +292,7 @@ workflow irods {
 workflow {
     if (params.help) {
         helpMessage()
-        exit 0
+        exit 1
     }
     // Do we just return the CRAM list?
     if (params.find_crams_only == false) {
@@ -284,8 +302,14 @@ workflow {
         // This will find the CRAMs and publish the list
         findcrams()
     }
-
-    if (params.for_upload == true){
+    // Do we want merge multiple sample number and lanes of a sample into one file?
+    if (params.merge == true){
         concatFastqs(irods.out)
     }
+}
+
+workflow.onComplete = {
+  log.info "Workflow completed at: ${workflow.complete}"
+  log.info "Time taken: ${workflow.duration}"
+  log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
 }
