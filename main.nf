@@ -199,6 +199,19 @@ process concatFastqs {
         """
 }
 
+process uploadFTP {
+    label "normal"
+    input:
+        path(fastqs)
+    output:
+        path("done")
+    script:
+        """
+        lftp -u ${params.ftp_credentials} ${params.ftp_host} -e "set ftp:ssl-allow no; cd ${params.ftp_path}; mput ${fastqs}; bye"
+        >done
+        """
+}
+
 // Helper workflow that creates a master CRAM list based on the metadata file
 workflow findcrams {
     main:
@@ -287,6 +300,7 @@ workflow irods {
         fastqs = fastqs
 }
 
+
 // Do this so the script actually runs
 // The equivalent of python's main() thing, I guess
 workflow {
@@ -304,12 +318,19 @@ workflow {
     }
     // Do we want merge multiple sample number and lanes of a sample into one file?
     if (params.merge == true){
-        concatFastqs(irods.out)
+        fastqs = concatFastqs(irods.out)
+
+        // Do we need yp upload file to an FTP?
+        if (params.ftp_upload == true){
+            arrayexpress(fastqs)
+        }
     }
 }
+
 
 workflow.onComplete = {
   log.info "Workflow completed at: ${workflow.complete}"
   log.info "Time taken: ${workflow.duration}"
   log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
 }
+
