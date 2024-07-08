@@ -4,7 +4,7 @@
 // Get CRAMs from iRODS and convert them to fastq 
 // Logic based on mapcloud CRAM downloader/converter
 // https://github.com/Teichlab/mapcloud/tree/58b1d7163de7b0b2b8880fad19d722b586fc32b9/scripts/10x/utils
-// Author: kp9
+// Author: kp9, bc8, sm42
  ///////////////////////////////////////////////////////////////////////////////
  
 nextflow.enable.dsl=2
