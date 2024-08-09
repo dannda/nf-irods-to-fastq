@@ -300,6 +300,23 @@ workflow irods {
         fastqs = fastqs
 }
 
+workflow irodsToFastq {
+    main:
+        irods()
+        if (params.merge == true){
+            fastqs = concatFastqs(irods.out)
+
+            // Do we need yp upload file to an FTP?
+            if (params.ftp_upload == true){
+                uploadFTP(fastqs)
+            }
+        } else {
+            fastqs = irods.out
+        }
+
+    emit:
+        fastqs = fastqs
+}
 
 // Do this so the script actually runs
 // The equivalent of python's main() thing, I guess
@@ -311,20 +328,12 @@ workflow {
     // Do we just return the CRAM list?
     if (params.find_crams_only == false) {
         // This needs to be a proper start to end workflow so fastqs can be emitted
-        irods()
+        irodsToFastq()
     } else {
         // This will find the CRAMs and publish the list
         findcrams()
     }
-    // Do we want merge multiple sample number and lanes of a sample into one file?
-    if (params.merge == true){
-        fastqs = concatFastqs(irods.out)
 
-        // Do we need yp upload file to an FTP?
-        if (params.ftp_upload == true){
-            arrayexpress(fastqs)
-        }
-    }
 }
 
 
